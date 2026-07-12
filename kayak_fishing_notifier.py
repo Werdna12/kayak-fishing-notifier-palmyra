@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Kayak Fishing Weekend Notifier - Palmyra WA (v2)
+Kayak Fishing Weekend Notifier - Palmyra WA (v2 - Fixed)
 Daily 4pm AWST check • Free Open-Meteo marine data • Moon phase aware
-Notifies only once per ideal weekend
 """
 
 import requests
@@ -32,18 +31,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 
 def get_moon_phase(d: date) -> str:
-    """Simple pure-Python moon phase."""
     known_new_moon = date(1900, 1, 31).toordinal()
     lunar_cycle = 29.53058867
     days_since = (d.toordinal() - known_new_moon) % lunar_cycle
     if days_since < 1.84566:
-        return "New Moon (good for some nocturnal feeders)"
+        return "New Moon"
     elif days_since < 7.382:
         return "Waxing Crescent"
     elif days_since < 14.765:
-        return "First Quarter / Waxing Gibbous (often good activity)"
+        return "First Quarter / Waxing Gibbous"
     elif days_since < 22.147:
-        return "Full Moon (excellent night fishing potential)"
+        return "Full Moon"
     elif days_since < 29.53:
         return "Waning Gibbous / Last Quarter"
     else:
@@ -79,13 +77,14 @@ def get_forecast():
     daily = []
     for i in range(14):
         day_date = dt.datetime.strptime(data["daily"]["time"][i], "%Y-%m-%d").date()
+        wave = marine_data["daily"].get("wave_height_max", [0]*14)[i]
         daily.append({
             "date": data["daily"]["time"][i],
             "temp_max": data["daily"]["temperature_2m_max"][i],
             "temp_min": data["daily"]["temperature_2m_min"][i],
             "precip_prob": data["daily"]["precipitation_probability_max"][i],
             "wind_max_kmh": data["daily"]["windspeed_10m_max"][i],
-            "wave_max_m": marine_data["daily"].get("wave_height_max", [0]*14)[i],
+            "wave_max_m": wave if wave is not None else 0,   # <-- FIX: handle None
             "moon_phase": get_moon_phase(day_date),
         })
     return daily
@@ -144,7 +143,7 @@ def generate_species_paragraph(weekend):
                 "Whiting and flathead will be more active during the calmer parts of the day. ")
 
     if "Full Moon" in moon or "New Moon" in moon:
-        base += "The current moon phase often increases nocturnal and dawn/dusk activity for many estuary species."
+        base += "The current moon phase often increases nocturnal and dawn/dusk activity."
     else:
         base += "Fishing pressure is usually moderate under the current moon phase."
 
@@ -165,7 +164,7 @@ def save_notified(notified_list):
 
 def send_email(subject, body):
     if not GMAIL_USER or not GMAIL_APP_PASSWORD:
-        logging.error("Gmail credentials missing")
+        logging.error("Gmail credentials missing in secrets")
         return False
     msg = MIMEText(body)
     msg["Subject"] = subject
@@ -183,7 +182,7 @@ def send_email(subject, body):
 
 
 def main():
-    logging.info("Starting daily kayak fishing check (v2)...")
+    logging.info("Starting daily kayak fishing check (v2 - fixed)...")
     daily = get_forecast()
     weekends = get_upcoming_weekends(daily)
     notified = load_notified()
